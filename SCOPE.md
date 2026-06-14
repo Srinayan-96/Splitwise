@@ -2,19 +2,22 @@
 
 ## Database Schema
 
-The schema lives in `db/schema.ts`. Here's what each table is for and why it exists.
+The project has two schema files:
+
+- `prisma/schema.prisma` — readable schema documentation in Prisma format. Good for the live session — shows the full model structure at a glance.
+- `db/schema.ts` — the active Drizzle ORM schema that the app actually uses for queries.
+
+Both define the same 7 tables. `db/migrations/0001_init.sql` is what was run on Supabase to create the actual tables.
 
 | Table | What it stores | Key design note |
 |---|---|---|
 | `users` | Every person — flat mates and guests | `name` is unique and is how CSV names get matched to accounts |
 | `groups` | A shared expense group | Simple — just a name and an ID |
 | `group_members` | Who belongs to which group, and when | Has `joined_at` and `left_at` columns — this is how the app knows Meera shouldn't share April rent and Sam shouldn't share February electricity |
-| `expenses` | One row per expense | `amount` is always in INR. If the original was USD, `original_amount`, `original_currency`, and `exchange_rate` are stored alongside so nothing is lost |
-| `expense_splits` | One row per person per expense | This is the source of truth for balances. Each row says "this person owes this exact amount for this expense" |
+| `expenses` | One row per expense | `amount` is always in INR. If the original was USD, `original_amount`, `original_currency`, and `exchange_rate` are stored alongside so nothing is lost. `import_row_num` links back to the CSV row for full traceability |
+| `expense_splits` | One row per person per expense | This is the source of truth for balances. Each row says exactly what one person owes for one expense |
 | `settlements` | Payment records | Separate from expenses. "Rohan paid Aisha back" is a settlement, not an expense |
-| `import_logs` | Every anomaly found during CSV import | Stores what was wrong, what the app did about it, and the severity — this is the import report |
-
-The separation between `expenses` and `expense_splits` is intentional. If the split were stored as a JSON column on the expense, you couldn't query "what does Rohan owe across all expenses" without parsing blobs. With a split table, it's one SQL query.
+| `import_logs` | Every anomaly found during CSV import | Stores what was wrong, what the app did, and the severity — this is the import report |
 
 ---
 

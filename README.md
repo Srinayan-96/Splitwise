@@ -105,14 +105,17 @@ app/
   dashboard/           list of all groups
   groups/[groupId]/    group detail — expenses, balances, import tabs
 db/
-  schema.ts            Drizzle schema (source of truth for DB structure)
+  schema.ts            Drizzle ORM schema (active — used for all queries)
   index.ts             database connection
   migrations/
     0001_init.sql      run this once to create all tables
+prisma/
+  schema.prisma        Prisma schema (documentation reference — same tables as db/schema.ts)
 lib/
   importer.ts          CSV anomaly detection — the core of the assignment
   balances.ts          balance computation + debt minimisation algorithm
   auth.ts              JWT sign/verify helpers
+  prisma.ts            re-exports Drizzle db client (named prisma for compatibility)
 README.md
 SCOPE.md               anomaly log + DB schema explanation
 DECISIONS.md           every significant decision and why

@@ -4,18 +4,18 @@ Every significant decision made during this project, what else was considered, a
 
 ---
 
-## 1. Tech stack — Next.js + Drizzle + PostgreSQL
+## 1. Tech stack — Next.js + Drizzle ORM + PostgreSQL
 
 **What we considered:**
-- Python (FastAPI or Flask) for the backend, React for the frontend — two separate repos, two deploys
-- Next.js with both frontend and API routes in one repo — single deploy
-- Django — full-featured but heavier than needed for this scope
+- Python (FastAPI or Flask) + React — two repos, two deploys
+- Next.js with API routes + frontend in one repo — single deploy
+- Django — too heavy for this scope
 
 **What we chose:** Next.js 14 with API routes, Drizzle ORM, PostgreSQL on Supabase, deployed on Vercel.
 
-**Why:** The assignment asks for a deployed app with a clean commit history, explained under pressure in a 45-minute live session. One repo with one deploy is easier to navigate than two. Next.js API routes sit right next to the pages that call them — when someone asks "show me what happens when this button is clicked", the answer is two files in the same folder, not a separate service running on a different port.
+**Why Next.js:** Single repo, single `git push` deploy. API routes live alongside the pages that call them. Under live-session pressure, navigating one codebase is faster than two.
 
-Drizzle was chosen over Prisma because Prisma downloads native binary engines at install time, which was blocked in our build environment. Drizzle is pure JavaScript — no binaries, no network calls at install, same SQL-first schema design.
+**On the ORM — Prisma was planned, Drizzle is what runs.** Prisma was the original choice because its `schema.prisma` file is a clean, readable schema document that doubles as the DB schema deliverable. It's still in the repo at `prisma/schema.prisma` and serves that documentation purpose. However, Prisma requires native binary engines that are downloaded at install time — this failed in the build environment. The actual database queries run through Drizzle ORM (`db/schema.ts`, `db/index.ts`), which is pure JavaScript with no binary dependencies. `lib/prisma.ts` re-exports the Drizzle client under the name `prisma` so the rest of the codebase didn't need to change. Both schema files exist — Prisma for documentation, Drizzle for runtime.
 
 ---
 
