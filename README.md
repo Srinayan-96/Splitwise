@@ -1,4 +1,4 @@
-# FlatSplit — Shared Expenses App
+# SplitWise — Shared Expenses App
 
 A shared expense tracker built for the Spreetail engineering internship assignment. Four flat mates, one messy spreadsheet, and a 2-day deadline to turn it into a proper app.
 
@@ -43,8 +43,8 @@ Everything lives in one repo. One `git push` deploys both the frontend and all A
 ### Steps
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/flatsplit
-cd flatsplit
+git clone https://github.com/YOUR_USERNAME/splitwise
+cd splitwise
 npm install
 ```
 
