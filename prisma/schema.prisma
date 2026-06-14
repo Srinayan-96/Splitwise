@@ -1,0 +1,131 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Users / Members ────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  name         String   @unique          // "Aisha", "Rohan", etc.
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  memberships  GroupMember[]
+  paidExpenses Expense[]       @relation("PaidBy")
+  splits       ExpenseSplit[]
+  paidSettlements  Settlement[] @relation("SettlementPayer")
+  recvSettlements  Settlement[] @relation("SettlementReceiver")
+}
+
+// ─── Groups ──────────────────────────────────────────────────────────────────
+
+model Group {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  members   GroupMember[]
+  expenses  Expense[]
+  settlements Settlement[]
+}
+
+// Tracks when each member was active in a group (handles Meera leaving, Sam joining)
+model GroupMember {
+  id       String    @id @default(cuid())
+  groupId  String
+  userId   String
+  joinedAt DateTime
+  leftAt   DateTime?            // NULL = still active
+
+  group    Group @relation(fields: [groupId], references: [id])
+  user     User  @relation(fields: [userId], references: [id])
+
+  @@unique([groupId, userId, joinedAt])
+}
+
+// ─── Expenses ─────────────────────────────────────────────────────────────────
+
+model Expense {
+  id           String      @id @default(cuid())
+  groupId      String
+  description  String
+  date         DateTime
+  amount       Decimal     @db.Decimal(12, 2)   // always stored in INR
+  originalAmount   Decimal?   @db.Decimal(12, 2) // if paid in foreign currency
+  originalCurrency String?                       // "USD"
+  exchangeRate     Decimal?   @db.Decimal(10, 4) // rate used at import time
+  splitType    SplitType
+  paidById     String
+  notes        String?
+  isDeleted    Boolean     @default(false)
+  importRowNum Int?                              // CSV row number for traceability
+  createdAt    DateTime    @default(now())
+
+  group        Group          @relation(fields: [groupId], references: [id])
+  paidBy       User           @relation("PaidBy", fields: [paidById], references: [id])
+  splits       ExpenseSplit[]
+}
+
+enum SplitType {
+  equal
+  unequal
+  percentage
+  share
+}
+
+// One row per person per expense — the actual ₹ each person owes
+model ExpenseSplit {
+  id        String  @id @default(cuid())
+  expenseId String
+  userId    String
+  amount    Decimal @db.Decimal(12, 2)  // what this person owes in INR
+
+  expense   Expense @relation(fields: [expenseId], references: [id])
+  user      User    @relation(fields: [userId], references: [id])
+
+  @@unique([expenseId, userId])
+}
+
+// ─── Settlements ──────────────────────────────────────────────────────────────
+
+model Settlement {
+  id         String   @id @default(cuid())
+  groupId    String
+  payerId    String
+  receiverId String
+  amount     Decimal  @db.Decimal(12, 2)
+  date       DateTime
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  group      Group @relation(fields: [groupId], references: [id])
+  payer      User  @relation("SettlementPayer",   fields: [payerId],    references: [id])
+  receiver   User  @relation("SettlementReceiver", fields: [receiverId], references: [id])
+}
+
+// ─── Import log — every anomaly found during CSV import ──────────────────────
+
+model ImportLog {
+  id          String   @id @default(cuid())
+  importedAt  DateTime @default(now())
+  rowNum      Int
+  field       String?
+  issue       String           // human-readable description
+  action      String           // what the app did
+  originalVal String?          // raw value from CSV
+  resolvedVal String?          // value after fix
+  severity    LogSeverity
+  approved    Boolean  @default(true)   // Meera's approval flag
+}
+
+enum LogSeverity {
+  INFO
+  WARNING
+  ERROR
+}
