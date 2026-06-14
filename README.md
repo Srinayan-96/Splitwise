@@ -1,23 +1,43 @@
 # FlatSplit — Shared Expenses App
 
-Built for the Spreetail engineering internship assignment. A shared expense tracker for flat mates with CSV import, multi-currency support, and time-aware membership.
+A shared expense tracker built for the Spreetail engineering internship assignment. Four flat mates, one messy spreadsheet, and a 2-day deadline to turn it into a proper app.
 
-## Live App
-**[https://flatsplit.vercel.app](https://flatsplit.vercel.app)** ← replace with your Vercel URL
+**Live app:** https://splitwise-nu-woad.vercel.app
 
-## Tech Stack
-- **Frontend + Backend:** Next.js 14 (App Router, API Routes)
-- **Database:** PostgreSQL on Supabase
-- **ORM:** Prisma
-- **Auth:** JWT via `jose`, passwords hashed with bcrypt
-- **Deploy:** Vercel
-- **AI used:** Claude (Anthropic) — see AI_USAGE.md
+---
 
-## Setup (local)
+## What it does
 
-### Prerequisites
-- Node.js 18+
-- A Supabase account (free tier) — or any PostgreSQL instance
+- Register and log in (JWT auth, passwords hashed)
+- Create expense groups with members who can join and leave over time
+- Add expenses with four split types: equal, unequal, percentage, by shares
+- Import the provided `expenses_export.csv` directly — no manual editing allowed
+- Detect and surface every data problem in the CSV, handle each one deliberately
+- Show group-wide balances and tell you exactly who pays whom to settle up
+- Record payments when someone actually settles a debt
+
+---
+
+## Tech stack
+
+| Layer | Choice |
+|---|---|
+| Frontend + Backend | Next.js 14 (App Router + API Routes) |
+| Database | PostgreSQL on Supabase |
+| ORM | Drizzle ORM |
+| Auth | JWT via `jose`, bcrypt for passwords |
+| Deploy | Vercel |
+| AI collaborator | Claude (Anthropic) — see AI_USAGE.md |
+
+Everything lives in one repo. One `git push` deploys both the frontend and all API routes. No separate backend server.
+
+---
+
+## Running locally
+
+### You'll need
+- Node.js 18 or higher
+- A PostgreSQL database (Supabase free tier works perfectly)
 
 ### Steps
 
@@ -27,91 +47,88 @@ cd flatsplit
 npm install
 ```
 
-Create `.env.local`:
+Create a `.env.local` file in the project root:
+
 ```
-DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DB?pgbouncer=true&connection_limit=1
-JWT_SECRET=your-random-secret-here
+DATABASE_URL=postgresql://postgres:PASSWORD@HOST:5432/postgres
+JWT_SECRET=any-random-string-you-make-up
 ```
+
+Set up the database tables by running the SQL in `db/migrations/0001_init.sql` — paste it into Supabase's SQL Editor and hit Run.
+
+Start the dev server:
 
 ```bash
-npx prisma db push       # creates tables
-npx prisma generate      # generates client
-npm run dev              # starts on http://localhost:3000
+npm run dev
 ```
 
-### Deploy to Vercel
-```bash
-npm install -g vercel
-vercel --prod
-```
-Add `DATABASE_URL` and `JWT_SECRET` in Vercel → Project → Settings → Environment Variables.
+App runs at `http://localhost:3000`.
 
-## Key Features
+---
 
-1. **Login / Register** — JWT cookie auth
-2. **Groups** — create groups, members tracked with join/leave dates
-3. **Expenses** — equal, unequal, percentage, share splits. All stored in INR.
-4. **Multi-currency** — USD amounts converted at a documented fixed rate, original values preserved
-5. **Balances** — per-person net balance + minimal debt settlement (greedy algorithm)
-6. **CSV Import** — ingests `expenses_export.csv` with full anomaly detection (20 issues found and handled)
-7. **Import Report** — every anomaly, action taken, severity, for Meera's approval workflow
+## Deploying to Vercel
 
-## Project Structure
+1. Push the repo to GitHub
+2. Go to [vercel.com](https://vercel.com) → Add New Project → import your repo
+3. Add two environment variables before deploying:
+   - `DATABASE_URL` — your Supabase connection string (use the Transaction Pooler URL)
+   - `JWT_SECRET` — any random string
+4. Click Deploy
+
+Vercel auto-deploys on every `git push` after that.
+
+---
+
+## Database setup (Supabase)
+
+1. Create a new project at [supabase.com](https://supabase.com)
+2. Go to SQL Editor → New query → paste the contents of `db/migrations/0001_init.sql` → Run
+3. Go to Settings → Database → Connection pooling → copy the Transaction Pooler URI
+4. Use that URI as your `DATABASE_URL` (replace `[YOUR-PASSWORD]` with your actual password)
+
+The migration creates 7 tables: `users`, `groups`, `group_members`, `expenses`, `expense_splits`, `settlements`, `import_logs`.
+
+---
+
+## Project structure
 
 ```
 app/
   api/
-    auth/         register, login, logout, me
-    groups/       CRUD + member join/leave
-    expenses/     CRUD
-    settlements/  record payments
-    balances/     compute net balances + settle-up
-    import/       CSV import endpoint
-  login/          login/register UI
-  dashboard/      groups list
-  groups/[id]/    expenses + balances + import tabs
+    auth/              register, login, logout, me
+    groups/            create groups, manage membership
+    expenses/          add, edit, soft-delete expenses
+    settlements/       record payments between members
+    balances/          compute net balances + settle-up instructions
+    import/            CSV import endpoint
+  login/               login and register UI
+  dashboard/           list of all groups
+  groups/[groupId]/    group detail — expenses, balances, import tabs
+db/
+  schema.ts            Drizzle schema (source of truth for DB structure)
+  index.ts             database connection
+  migrations/
+    0001_init.sql      run this once to create all tables
 lib/
-  importer.ts     CSV anomaly detection (core logic)
-  balances.ts     balance computation + debt minimisation
-  auth.ts         JWT helpers
-  prisma.ts       Prisma client singleton
-prisma/
-  schema.prisma   database schema (source of truth)
-docs/
-SCOPE.md          anomaly log + schema description
-DECISIONS.md      engineering decision log
-AI_USAGE.md       AI tool usage log
+  importer.ts          CSV anomaly detection — the core of the assignment
+  balances.ts          balance computation + debt minimisation algorithm
+  auth.ts              JWT sign/verify helpers
+README.md
+SCOPE.md               anomaly log + DB schema explanation
+DECISIONS.md           every significant decision and why
+AI_USAGE.md            how AI was used, and where it went wrong
 ```
 
-## Database Setup (Supabase — recommended)
+---
 
-1. Go to [supabase.com](https://supabase.com) → New project
-2. Go to **SQL Editor** → paste the contents of `db/migrations/0001_init.sql` → Run
-3. Go to **Settings → Database → Connection string** → copy the URI
-4. Add it to `.env.local` and Vercel environment variables as `DATABASE_URL`
+## For the live session
 
-The migration creates all 7 tables with correct foreign keys and enum types.
+The four files most likely to be probed:
 
-## Vercel Deployment Steps
+**`lib/importer.ts`** — walks through every row of the CSV, detects 20 data problems, decides what to do with each one. Every decision is logged. No silent failures.
 
-```bash
-# 1. Push to GitHub
-git init && git add . && git commit -m "feat: initial working app"
-git remote add origin https://github.com/YOUR_USERNAME/flatsplit
-git push -u origin main
+**`lib/balances.ts`** — `computeBalances()` builds a net position for each person from the expense splits. `minimiseDebts()` uses a greedy largest-debtor-to-largest-creditor algorithm to produce the shortest possible list of payments to settle everything.
 
-# 2. Import on Vercel
-# Go to vercel.com → Add New Project → Import from GitHub
-# Add env vars: DATABASE_URL, JWT_SECRET
-# Deploy
-```
+**`db/schema.ts`** — `group_members` has `joined_at` and `left_at` columns so the app knows Sam shouldn't share February rent. `expense_splits` is a separate table so every person's exact share is a queryable row, not a JSON blob.
 
-## Live Session Preparation
-
-For the 45-min live session, be ready to explain:
-
-- `lib/importer.ts` — every anomaly detection rule, line by line
-- `lib/balances.ts` — the `computeBalances` and `minimiseDebts` algorithms
-- `db/schema.ts` — why GroupMember has joinedAt/leftAt, why ExpenseSplit is a separate table
-- `app/api/import/route.ts` → `computeSplits()` — how each split type is calculated
-- `DECISIONS.md` — every decision, the alternatives, and why you chose what you chose
+**`DECISIONS.md`** — every fork in the road, what else was considered, and the reasoning behind what was chosen.

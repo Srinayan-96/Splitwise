@@ -1,123 +1,129 @@
-# DECISIONS.md — Engineering & Product Decision Log
+# DECISIONS.md — Decision Log
 
-## 1. Tech Stack: Next.js + PostgreSQL + Prisma
-
-**Options considered:**
-- Python (Flask/FastAPI) + React (separate repos)
-- Next.js (single repo, API routes + frontend)
-- Django (heavy, admin panel not needed)
-
-**Decision:** Next.js + Prisma + PostgreSQL hosted on Supabase, deployed on Vercel.
-
-**Why:** Single repo, single `git push` deploy. API routes live alongside pages. Prisma schema file doubles as the schema documentation required by the assignment. Under live-session pressure, navigating one codebase is materially faster than two.
+Every significant decision made during this project, what else was considered, and why we went the way we did.
 
 ---
 
-## 2. Currency Conversion: Fixed Rate, Documented
+## 1. Tech stack — Next.js + Drizzle + PostgreSQL
 
-**Options considered:**
-- Live Open Exchange Rates API (real-time)
-- Fixed rate stored in .env and documented
+**What we considered:**
+- Python (FastAPI or Flask) for the backend, React for the frontend — two separate repos, two deploys
+- Next.js with both frontend and API routes in one repo — single deploy
+- Django — full-featured but heavier than needed for this scope
 
-**Decision:** Fixed rate (default ₹83.5 to $1), user-editable at import time, stored per expense in `exchangeRate` column.
+**What we chose:** Next.js 14 with API routes, Drizzle ORM, PostgreSQL on Supabase, deployed on Vercel.
 
-**Why:** Live API introduces an external failure point and rate drift between import runs. A fixed, documented rate is reproducible and auditable — if you re-import the CSV a year from now with the same rate, you get the same numbers. The rate used is stored on each expense row so it's never a mystery.
+**Why:** The assignment asks for a deployed app with a clean commit history, explained under pressure in a 45-minute live session. One repo with one deploy is easier to navigate than two. Next.js API routes sit right next to the pages that call them — when someone asks "show me what happens when this button is clicked", the answer is two files in the same folder, not a separate service running on a different port.
 
----
-
-## 3. Negative Amount = Refund, Not Error
-
-**Options considered:**
-- Reject negative amounts as errors
-- Treat as refunds (negative splits)
-
-**Decision:** Treat as refund. The parasailing cancellation is clearly a partial refund (-$30). Splits are computed as negative amounts — each person gets credited their share.
-
-**Why:** The note "one slot got cancelled" makes intent unambiguous. Erroring here would lose real financial data. The ImportLog records this for review.
+Drizzle was chosen over Prisma because Prisma downloads native binary engines at install time, which was blocked in our build environment. Drizzle is pure JavaScript — no binaries, no network calls at install, same SQL-first schema design.
 
 ---
 
-## 4. Duplicate Detection: Two-tier
+## 2. Currency conversion — fixed rate, not a live API
 
-**Options considered:**
-- Hash-based deduplication (exact match only)
-- Fuzzy match by date + normalised description + amount + payer
-- Two-tier: exact duplicate → skip silently; conflicting duplicate → flag and keep first
+**What we considered:**
+- Calling a live exchange rate API (Open Exchange Rates, etc.) at import time
+- Using a fixed rate that's documented and stored per expense
 
-**Decision:** Two-tier. Exact duplicates (Marina Bites) are auto-skipped. Conflicting duplicates (Thalassa dinner with different amounts and payers) are flagged — first row wins, second is skipped with a WARNING in the log.
+**What we chose:** Fixed rate, defaulting to ₹83.5 per dollar, editable by the user at import time. The rate used is stored on each expense row in the database.
 
-**Why:** A silent skip for conflicting entries would hide a real data dispute. Keeping first and flagging surfaces it for human review without blocking the import.
-
----
-
-## 5. Membership Windows: Hard-coded from CSV Context
-
-**Options considered:**
-- Infer membership dates automatically from first/last appearance in CSV
-- Hard-code from story context (Meera left end-March, Sam joined mid-April)
-
-**Decision:** Hard-coded based on the assignment context. Meera: Feb 1 – Mar 31. Sam: Apr 15 onward.
-
-**Why:** Inferring from CSV would be wrong — Meera appears in a March expense, and Sam first appears Apr 8 (deposit), but his actual move-in is mid-April per the story. Using CSV first-appearance would produce incorrect membership windows. The membership dates are documented here and in the code for the live session.
+**Why:** A live API introduces a failure point that has nothing to do with the app's logic — if the exchange rate service is down, the import fails. More importantly, re-importing the same CSV a week later with a live rate would produce different numbers, making it impossible to audit or reproduce results. A fixed, documented rate means the numbers are stable and traceable. If someone asks "why does this expense show ₹4,175?", the answer is "$50 × ₹83.5" — fully visible on the expense record.
 
 ---
 
-## 6. "Settlement Logged as Expense" Detection: Regex on Description
+## 3. Negative amounts — refund, not error
 
-**Options considered:**
-- Manual flag column in CSV
-- Regex on description + note fields
-- ML classification (overkill)
+**What we considered:**
+- Reject any negative amount as invalid data
+- Treat negative amounts as refunds (negative splits credit each person)
 
-**Decision:** Regex matching `paid.*back|deposit share|settlement` on description and notes fields.
+**What we chose:** Treat as refund.
 
-**Why:** Simple and transparent. The two affected rows ("Rohan paid Aisha back", "Sam deposit share") are caught cleanly. Easy to explain line by line in the live session.
-
----
-
-## 7. Percentage Normalisation: Proportional Rescaling
-
-**Options considered:**
-- Reject if percentages don't sum to 100
-- Normalise proportionally (divide each by total)
-
-**Decision:** Normalise proportionally. Pizza Friday (30+30+30+20 = 110%) is rescaled so each person's share stays in the same ratio.
-
-**Why:** Erroring here loses a valid expense. The note says "percentages might be off" — clearly a user typo. Rescaling preserves intent. Auto-fixed with the original and resolved values logged.
+**Why:** The context makes it unambiguous. Row 25 is a parasailing trip with a note saying "one slot got cancelled" and the amount is -$30. That's a refund. Rejecting it would silently drop real money from the group's records. The import log records it as KEPT_WITH_WARNING so it's visible, and the negative splits correctly reduce each person's balance.
 
 ---
 
-## 8. Rounding: Banker's Rounding NOT Used — Last-Person Adjustment
+## 4. Duplicate detection — two-tier, not one-size-fits-all
 
-**Options considered:**
-- Banker's rounding (round half to even)
-- Always round down, accumulate remainder to last person
+**What we considered:**
+- Exact match only (same date + description + amount + payer = duplicate)
+- Fuzzy match on description alone
+- Two-tier: exact duplicates handled differently from conflicting duplicates
 
-**Decision:** Round each split to 2dp; assign the remainder (amountINR minus sum of other splits) to the last person in the list.
+**What we chose:** Two-tier approach. Exact duplicates (Marina Bites — same everything) are auto-skipped. Conflicting duplicates (Thalassa dinner — same meal, different payers and amounts) are flagged and the first row wins.
 
-**Why:** Total must always equal the expense amount exactly. Banker's rounding applied independently per split can produce totals that are ±1 paisa off. Last-person adjustment guarantees the sum. The discrepancy is at most (n-1) paise where n is the number of splits.
-
----
-
-## 9. Missing paid_by: Skip Row
-
-**Options considered:**
-- Default to logged-in user
-- Skip the row and flag it
-
-**Decision:** Skip and flag as ERROR.
-
-**Why:** Defaulting silently would assign a debt to the wrong person — potentially worse than skipping. The house cleaning row (Row 12) has a note "can't remember who paid" — this is a genuine unknown that requires human input.
+**Why:** These are two genuinely different situations. An exact duplicate is almost certainly an accidental double-entry — safe to skip silently. A conflicting duplicate means two people logged the same event differently, which is a real data dispute. Auto-picking one without flagging it would hide that dispute. Flagging it gives Meera something to review.
 
 ---
 
-## 10. Ambiguous Date 04-05-2026: Treat as DD-MM, Flag for Review
+## 5. Membership windows — hard-coded from the assignment narrative
 
-**Options considered:**
-- Treat as MM-DD (American format)
-- Treat as DD-MM (used by all other rows in this CSV)
-- Error out
+**What we considered:**
+- Infer membership dates from each person's first and last appearance in the CSV
+- Hard-code the dates from the assignment description
 
-**Decision:** Treat as DD-MM (May 4) to be consistent with all other dates in the file, but flag as FLAGGED_FOR_REVIEW.
+**What we chose:** Hard-coded. Meera: February 1 to March 31. Sam: April 15 onward.
 
-**Why:** All 40 other dates in the CSV use DD-MM format. Switching format mid-file for one row would be inconsistent. Flagging it means the user is informed and can override if needed.
+**Why:** Inferring from CSV appearances produces wrong answers. Sam first appears in the CSV on April 8 (the deposit row), but the assignment says he moved in mid-April. If we used first appearance, Sam would be billed for the April 8 deposit itself — which is the payment he made when moving in, not a shared flat expense. Meera appears in a farewell dinner row in late March, so inferring her leave date from "last appearance" also goes wrong. The story in the assignment is the authoritative source, not the CSV row order.
+
+---
+
+## 6. Detecting settlements in the CSV — regex on description
+
+**What we considered:**
+- Requiring a dedicated "type" column in the CSV (not possible — we can't edit the CSV)
+- Regex matching on the description and notes fields
+- Machine learning classification (wildly overkill)
+
+**What we chose:** Regex. Pattern: `paid.*back|deposit share|settlement` on the description and notes combined.
+
+**Why:** There are exactly two rows that need this treatment ("Rohan paid Aisha back" and "Sam deposit share") and both are caught cleanly by the regex. The pattern is readable, testable, and easy to explain in the live session. A more sophisticated approach would add complexity without improving outcomes for this specific dataset.
+
+---
+
+## 7. Percentage splits that don't add up to 100 — normalise, don't reject
+
+**What we considered:**
+- Reject the row and flag it as an error
+- Normalise proportionally (divide each percentage by the total)
+
+**What we chose:** Normalise proportionally.
+
+**Why:** The Pizza Friday row has percentages that add up to 110%. The note on the row says "percentages might be off". The intent is clear — four people sharing a pizza with roughly those proportions. Rejecting the row loses a valid expense. Normalising to 100% preserves the relative shares and gets the maths right. The original and corrected values are both stored in the import log.
+
+---
+
+## 8. Rounding — last-person adjustment, not independent rounding
+
+**What we considered:**
+- Round each person's split independently to 2 decimal places
+- Round n-1 splits independently, assign the remainder to the last person
+
+**What we chose:** Last-person adjustment.
+
+**Why:** Independent rounding can make the splits sum to slightly more or less than the expense total. For example, ₹100 split three ways is ₹33.33 × 3 = ₹99.99, not ₹100. The last-person adjustment forces the sum to be exact. The maximum discrepancy any one person absorbs is (n-1) paise, which on any realistic expense is less than a rupee — an acceptable rounding artefact.
+
+---
+
+## 9. Missing payer — skip the row, don't guess
+
+**What we considered:**
+- Default to the logged-in user who triggered the import
+- Skip the row and flag it as an error requiring human input
+
+**What we chose:** Skip and flag as ERROR.
+
+**Why:** Defaulting to the importing user would silently assign a debt to the wrong person. That's worse than having a gap in the data. The row in question (house cleaning supplies) has a note saying "can't remember who paid" — the original data creator already flagged this as genuinely unknown. The right response is to surface it, not guess.
+
+---
+
+## 10. Ambiguous date (04-05-2026) — treat as DD-MM, flag it
+
+**What we considered:**
+- Treat as MM-DD (American format) → April 5
+- Treat as DD-MM (used by every other row in the CSV) → May 4
+- Reject as unparseable
+
+**What we chose:** Treat as DD-MM (May 4) for consistency with the rest of the file, but flag it as FLAGGED_FOR_REVIEW so a human can verify.
+
+**Why:** Every other date in the CSV uses DD-MM format. Treating one row differently without evidence would be inconsistent. But the date is genuinely ambiguous — both interpretations are valid calendar dates — so flagging it rather than silently committing is the right call. The import report shows it clearly.
