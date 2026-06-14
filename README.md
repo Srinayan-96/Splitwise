@@ -2,7 +2,7 @@
 
 A shared expense tracker built for the Spreetail engineering internship assignment. Four flat mates, one messy spreadsheet, and a 2-day deadline to turn it into a proper app.
 
-**Live app:** https://splitwise-nu-woad.vercel.app
+**Live app:** splitwise-expense-xi.vercel.app
 
 ---
 
@@ -20,14 +20,14 @@ A shared expense tracker built for the Spreetail engineering internship assignme
 
 ## Tech stack
 
-| Layer | Choice |
-|---|---|
+| Layer              | Choice                               |
+| ------------------ | ------------------------------------ |
 | Frontend + Backend | Next.js 14 (App Router + API Routes) |
-| Database | PostgreSQL on Supabase |
-| ORM | Drizzle ORM |
-| Auth | JWT via `jose`, bcrypt for passwords |
-| Deploy | Vercel |
-| AI collaborator | Claude (Anthropic) — see AI_USAGE.md |
+| Database           | PostgreSQL on Supabase               |
+| ORM                | Drizzle ORM                          |
+| Auth               | JWT via `jose`, bcrypt for passwords |
+| Deploy             | Vercel                               |
+| AI collaborator    | Claude (Anthropic) — see AI_USAGE.md |
 
 Everything lives in one repo. One `git push` deploys both the frontend and all API routes. No separate backend server.
 
@@ -36,6 +36,7 @@ Everything lives in one repo. One `git push` deploys both the frontend and all A
 ## Running locally
 
 ### You'll need
+
 - Node.js 18 or higher
 - A PostgreSQL database (Supabase free tier works perfectly)
 
